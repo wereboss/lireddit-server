@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { MikroORM } from "@mikro-orm/core";
-import { __prod__ } from "./constants";
+import { COOKIE_NAME, __prod__ } from "./constants";
 import { Post } from "./entities/Post";
 import mikroOrmConfig from "./mikro-orm.config";
 import express from "express";
@@ -9,14 +9,18 @@ import { buildSchema } from "type-graphql";
 import { HelloResolver } from "./resolvers/hello";
 import { PostResolver } from "./resolvers/Post";
 import { UserResolver } from "./resolvers/user";
-import redis from "redis";
+import Redis from "ioredis";
 import session from "express-session";
 import connectRedis from "connect-redis";
 import { MyContext } from "./types";
+import cors from 'cors';
+// import { sendEmail } from "./utils/sendEmail";
+// import { User } from "./entities/User";
 
 const main = async () => {
+    //sendEmail('sr1n4th5tudy@gmail.com','lireddit server Change Email test');    
   const orm = await MikroORM.init(mikroOrmConfig);
-
+//   await orm.em.nativeDelete(User,{});
   // const post = orm.em.create(Post,{title:'My First Post in React'});
   await orm.getMigrator().up();
   // console.log('------sql-----');
@@ -32,13 +36,18 @@ const main = async () => {
   // });
 
   const RedisStore = connectRedis(session);
-  const redisClient = redis.createClient();
+  const redis = new Redis();
+
+app.use(cors({
+    origin:"http://localhost:3000",
+    credentials:true,
+}))
 
   app.use(
     session({
-      name: "qid",
+      name: COOKIE_NAME,
       store: new RedisStore({
-        client: redisClient,
+        client: redis,
         disableTouch: true,
       }),
       cookie: {
@@ -48,7 +57,7 @@ const main = async () => {
         sameSite: "lax", //csrf
       },
       secret: "iyubjgkuyugjvjh",
-      saveUninitialized:false,
+      saveUninitialized: false,
       resave: false,
     })
   );
@@ -58,11 +67,16 @@ const main = async () => {
       validate: false,
     }),
     context: ({ req, res }): MyContext => {
-        return ({ em: orm.em, req, res });
+      return { em: orm.em, req, res, redis };
     },
   });
 
-  apolloServer.applyMiddleware({ app });
+  apolloServer.applyMiddleware({
+    app,
+    cors:false
+    // cors: { origin: "http://localhost:3000" },
+    //this is before adding cors pkg
+  });
 
   app.listen(4000, () => {
     console.log("Express started on localhost:4000");
